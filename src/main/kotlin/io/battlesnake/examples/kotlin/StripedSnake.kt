@@ -1,0 +1,100 @@
+/*
+ * Copyright © 2021 Paul Ambrose (pambrose@mac.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
+
+package io.battlesnake.examples.kotlin
+
+import io.battlesnake.core.*
+import io.ktor.application.*
+
+object StripedSnake : AbstractBattleSnake<StripedSnake.MySnakeContext>() {
+
+    override fun gameStrategy(): GameStrategy<MySnakeContext> =
+        strategy(verbose = true) {
+
+            onDescribe { call: ApplicationCall ->
+                DescribeResponse("me", "#ff00ff", "beluga", "bolt")
+            }
+
+            onStart { context: MySnakeContext, request: StartRequest ->
+                val you = request.you
+                val board = request.board
+                context.gotoOriginMoves = originPath(you.headPosition.x, you.headPosition.y).iterator()
+                context.stripedMoves = stripePath(board.width, board.height).iterator()
+            }
+
+
+            onMove { context: MySnakeContext, request: MoveRequest ->
+                if (request.isAtOrigin)
+                    context.visitedOrigin = true
+
+                if (!context.visitedOrigin)
+                    context.gotoOriginMoves.next()
+                else
+                    context.stripedMoves.next()
+            }
+        }
+
+    override fun snakeContext(): MySnakeContext = MySnakeContext()
+
+    class MySnakeContext : SnakeContext() {
+        lateinit var gotoOriginMoves: Iterator<MoveResponse>
+        lateinit var stripedMoves: Iterator<MoveResponse>
+        var visitedOrigin = false
+    }
+
+    private fun originPath(x: Int, y: Int): Sequence<MoveResponse> =
+        sequence {
+            repeat(x) { yield(LEFT) }
+            repeat(y) { yield(DOWN) }
+        }
+
+    private fun stripePath(width: Int, height: Int): Sequence<MoveResponse> =
+        sequence {
+            while (true) {
+                repeat((height / 2) - 1) {
+                    repeat(width - 1) { yield(RIGHT) }
+                    yield(UP)
+                    repeat(width - 1) { yield(LEFT) }
+                    yield(UP)
+                }
+
+                repeat(width - 1) { yield(RIGHT) }
+                yield(UP)
+                repeat(width - 1) { yield(LEFT) }
+
+                if (height.isOdd) {
+                    // Finish odd bottom line
+                    yield(UP)
+                    repeat(width - 1) { yield(RIGHT) }
+
+                    // Get back to origin with S pattern
+                    repeat((height - 1) / 2) { yield(DOWN) }
+                    repeat(width - 1) { yield(LEFT) }
+                    repeat((height - 1) / 2) { yield(DOWN) }
+                } else {
+                    // Go straight back to origin
+                    repeat(height - 1) { yield(DOWN) }
+                }
+            }
+        }
+
+    @JvmStatic
+    fun main(args: Array<String>) {
+        run()
+    }
+}
